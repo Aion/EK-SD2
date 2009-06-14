@@ -1,4 +1,4 @@
-/* Copyright (C) 2006 - 2009 ScriptDev2 <https://scriptdev2.svn.sourceforge.net/>
+/* Copyright (C) 2008 - 2009 Trinity <http://www.trinitycore.org/>
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -6,60 +6,32 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 
-/* ScriptData
-SDName: Boss_Noth
-SD%Complete: 40
-SDComment: Missing Balcony stage
-SDCategory: Naxxramas
-EndScriptData */
-
 #include "precompiled.h"
+#include "def_naxxramas.h"
 
-enum
-{
-    SAY_AGGRO1                          = -1533075,
-    SAY_AGGRO2                          = -1533076,
-    SAY_AGGRO3                          = -1533077,
-    SAY_SUMMON                          = -1533078,
-    SAY_SLAY1                           = -1533079,
-    SAY_SLAY2                           = -1533080,
-    SAY_DEATH                           = -1533081,
+#define SAY_AGGRO               RAND(-1533075,-1533076,-1533077)
+#define SAY_SUMMON              -1533078
+#define SAY_SLAY                RAND(-1533079,-1533080)
+#define SAY_DEATH               -1533081
 
-    SPELL_BLINK                         = 29211,            //29208, 29209 and 29210 too
-    SPELL_CRIPPLE                       = 29212,
-    SPELL_CRIPPLE_H                     = 54814,
-    SPELL_CURSE_PLAGUEBRINGER           = 29213,
-    SPELL_CURSE_PLAGUEBRINGER_H         = 54835,
+#define SOUND_DEATH      8848
 
-    SPELL_SUMMON_CHAMPION_AND_CONSTRUCT = 29240,
-    SPELL_SUMMON_GUARDIAN_AND_CONSTRUCT = 29269,
+#define SPELL_CURSE_PLAGUEBRINGER       HEROIC(29213,54835)
+#define SPELL_BLINK                     RAND(29208,29209,29210,29211)
+#define SPELL_CRIPPLE                   HEROIC(29212,54814)
+#define SPELL_TELEPORT                  29216
 
-    NPC_PLAGUED_WARRIOR                 = 16984,
-
-};
-
-uint32 m_auiSpellSummonPlaguedWarrior[]=
-{
-    29247, 29248, 29249
-};
-
-uint32 m_auiSpellSummonPlaguedChampion[]=
-{
-    29217, 29224, 29225, 29227, 29238, 29255, 29257, 29258, 29262, 29267
-};
-
-uint32 m_auiSpellSummonPlaguedGuardian[]=
-{
-    29226, 29239, 29256, 29268
-};
+#define MOB_WARRIOR         16984
+#define MOB_CHAMPION        16983
+#define MOB_GUARDIAN        16981
 
 // Teleport position of Noth on his balcony
 #define TELE_X 2631.370
@@ -67,108 +39,165 @@ uint32 m_auiSpellSummonPlaguedGuardian[]=
 #define TELE_Z 274.040
 #define TELE_O 6.277
 
-// IMPORTANT: BALCONY TELEPORT NOT ADDED YET! WILL BE ADDED SOON!
-// Dev note 26.12.2008: When is soon? :)
+#define MAX_SUMMON_POS 5
 
-struct MANGOS_DLL_DECL boss_nothAI : public ScriptedAI
+const float SummonPos[MAX_SUMMON_POS][4] =
 {
-    boss_nothAI(Creature* pCreature) : ScriptedAI(pCreature)
+    {2728.12, -3544.43, 261.91, 6.04},
+    {2729.05, -3544.47, 261.91, 5.58},
+    {2728.24, -3465.08, 264.20, 3.56},
+    {2704.11, -3456.81, 265.53, 4.51},
+    {2663.56, -3464.43, 262.66, 5.20},
+};
+
+enum Events
+{
+    EVENT_BERSERK   = 1,
+    EVENT_CURSE,
+    EVENT_BLINK,
+    EVENT_WARRIOR,
+    EVENT_BALCONY,
+    EVENT_WAVE,
+    EVENT_GROUND,
+};
+
+struct MANGOS_DLL_DECL boss_nothAI : public BossAI
+{
+    boss_nothAI(Creature *c) : BossAI(c, BOSS_NOTH) {}
+
+    uint32 waveCount, balconyCount;
+
+    void EnterCombat(Unit *who)
     {
-        m_pInstance = (ScriptedInstance*)pCreature->GetInstanceData();
-        m_bIsHeroicMode = pCreature->GetMap()->IsHeroic();
-        Reset();
+        _EnterCombat();
+        DoScriptText(SAY_AGGRO, me);
+        balconyCount = 0;
+        EnterPhaseGround();
     }
 
-    ScriptedInstance* m_pInstance;
-    bool m_bIsHeroicMode;
-
-    uint32 Blink_Timer;
-    uint32 Curse_Timer;
-    uint32 Summon_Timer;
-
-    void Reset()
+    void EnterPhaseGround()
     {
-        Blink_Timer = 25000;
-        Curse_Timer = 4000;
-        Summon_Timer = 12000;
-    }
-
-    void Aggro(Unit *who)
-    {
-        switch (rand()%3)
+        DoZoneInCombat();
+        if(me->getThreatManager().isThreatListEmpty())
+            EnterEvadeMode();
+        else
         {
-            case 0: DoScriptText(SAY_AGGRO1, m_creature); break;
-            case 1: DoScriptText(SAY_AGGRO2, m_creature); break;
-            case 2: DoScriptText(SAY_AGGRO3, m_creature); break;
+            events.ScheduleEvent(EVENT_BALCONY, 110000);
+            events.ScheduleEvent(EVENT_CURSE, 20000+rand()%10000);
+            events.ScheduleEvent(EVENT_WARRIOR, 30000);
+            if(HeroicMode)
+                events.ScheduleEvent(EVENT_BLINK, 20000+rand()%10000);
         }
-    }
-
-    void JustSummoned(Creature* summoned)
-    {
-        if (Unit* target = SelectUnit(SELECT_TARGET_RANDOM,0))
-            summoned->AddThreat(target,0.0f);
     }
 
     void KilledUnit(Unit* victim)
     {
-        switch (rand()%2)
-        {
-            case 0: DoScriptText(SAY_SLAY1, m_creature); break;
-            case 1: DoScriptText(SAY_SLAY2, m_creature); break;
-        }
+        if(!(rand()%5))
+            DoScriptText(SAY_SLAY, me);
+    }
+
+    void JustSummoned(Creature *summon)
+    {
+        summons.Summon(summon);
+        summon->setActive(true);
+        summon->AI()->DoZoneInCombat();
     }
 
     void JustDied(Unit* Killer)
     {
-        DoScriptText(SAY_DEATH, m_creature);
+        _JustDied();
+        DoScriptText(SAY_DEATH, me);
+    }
+
+    void SummonUndead(uint32 entry, uint32 num)
+    {
+        for(uint32 i = 0; i < num; ++i)
+        {
+            uint32 pos = rand()%MAX_SUMMON_POS;
+            me->SummonCreature(entry, SummonPos[pos][0], SummonPos[pos][1], SummonPos[pos][2],
+                SummonPos[pos][3], TEMPSUMMON_CORPSE_DESPAWN, 60000);
+        }
     }
 
     void UpdateAI(const uint32 diff)
     {
-        if (!m_creature->SelectHostilTarget() || !m_creature->getVictim())
+        if(!UpdateCombatState() || !CheckInRoom())
             return;
 
-        //Blink_Timer
-        if (Blink_Timer < diff)
+        events.Update(diff);
+
+        while(uint32 eventId = events.ExecuteEvent())
         {
-            DoCast(m_creature->getVictim(),SPELL_CRIPPLE);
-            DoCast(m_creature,SPELL_BLINK);
+            switch(eventId)
+            {
+                case EVENT_CURSE:
+                    DoCastAOE(SPELL_CURSE_PLAGUEBRINGER);
+                    events.ScheduleEvent(EVENT_CURSE, 20000+rand()%10000);
+                    return;
+                case EVENT_WARRIOR:
+                    DoScriptText(SAY_SUMMON, me);
+                    SummonUndead(MOB_WARRIOR, HEROIC(2,3));
+                    events.ScheduleEvent(EVENT_WARRIOR, 30000);
+                    return;
+                case EVENT_BLINK:
+                    DoCastAOE(SPELL_CRIPPLE, true);
+                    DoCastAOE(SPELL_BLINK);
+                    DoResetThreat();
+                    events.ScheduleEvent(EVENT_BLINK, 20000+rand()%10000);
+                    return;
+                case EVENT_BALCONY:
+                    me->SetReactState(REACT_PASSIVE);
+                    me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+                    me->AttackStop();
+                    me->RemoveAllAuras();
+                    me->NearTeleportTo(TELE_X, TELE_Y, TELE_Z, TELE_O);
+                    events.Reset();
+                    events.ScheduleEvent(EVENT_WAVE, 2000);
+                    waveCount = 0;
+                    return;
+                case EVENT_WAVE:
+                    DoScriptText(SAY_SUMMON, me);
+                    switch(balconyCount)
+                    {
+                        case 0: SummonUndead(MOB_CHAMPION, HEROIC(2,4)); break;
+                        case 1: SummonUndead(MOB_CHAMPION, HEROIC(1,2));
+                                SummonUndead(MOB_GUARDIAN, HEROIC(1,2)); break;
+                        case 2: SummonUndead(MOB_GUARDIAN, HEROIC(2,4)); break;
+                        default:SummonUndead(MOB_CHAMPION, HEROIC(5,10));
+                                SummonUndead(MOB_GUARDIAN, HEROIC(5,10));break;
+                    }
+                    ++waveCount;
+                    events.ScheduleEvent(waveCount < 2 ? EVENT_WAVE : EVENT_GROUND, 34000);
+                    return;
+                case EVENT_GROUND:
+                {
+                    ++balconyCount;
+                    me->SetReactState(REACT_AGGRESSIVE);
+                    me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+                    float x, y, z, o;
+                    me->GetHomePosition(x, y, z, o);
+                    me->NearTeleportTo(x, y, z, o);
+                    EnterPhaseGround();
+                    return;
+                }
+            }
+        }
 
-            Blink_Timer = 25000;
-        }else Blink_Timer -= diff;
-
-        //Curse_Timer
-        if (Curse_Timer < diff)
-        {
-            DoCast(m_creature->getVictim(),SPELL_CURSE_PLAGUEBRINGER);
-            Curse_Timer = 28000;
-        }else Curse_Timer -= diff;
-
-        //Summon_Timer
-        if (Summon_Timer < diff)
-        {
-            DoScriptText(SAY_SUMMON, m_creature);
-
-            for(uint8 i = 0; i < 6; i++)
-                m_creature->SummonCreature(NPC_PLAGUED_WARRIOR,2684.804,-3502.517,261.313,0,TEMPSUMMON_TIMED_OR_DEAD_DESPAWN,80000);
-
-            Summon_Timer = 30500;
-        } else Summon_Timer -= diff;
-
-        DoMeleeAttackIfReady();
+        if(me->HasReactState(REACT_AGGRESSIVE))
+            DoMeleeAttackIfReady();
     }
 };
 
-CreatureAI* GetAI_boss_noth(Creature* pCreature)
+CreatureAI* GetAI_boss_noth(Creature *_Creature)
 {
-    return new boss_nothAI(pCreature);
+    return new boss_nothAI (_Creature);
 }
 
 void AddSC_boss_noth()
 {
     Script *newscript;
     newscript = new Script;
-    newscript->Name = "boss_noth";
+    newscript->Name="boss_noth";
     newscript->GetAI = &GetAI_boss_noth;
     newscript->RegisterSelf();
 }

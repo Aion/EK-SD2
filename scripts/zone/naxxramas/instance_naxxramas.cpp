@@ -1,4 +1,4 @@
-/* Copyright (C) 2006 - 2009 ScriptDev2 <https://scriptdev2.svn.sourceforge.net/>
+/* Copyright (C) 2008 - 2009 Trinity <http://www.trinitycore.org/>
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -6,112 +6,189 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 
-/* ScriptData
-SDName: Instance_Naxxramas
-SD%Complete: 10
-SDComment:
-SDCategory: Naxxramas
-EndScriptData */
-
 #include "precompiled.h"
+#include "def_naxxramas.h"
 
-#define ENCOUNTERS              1
-
-enum
+const DoorData doorData[] =
 {
-    GO_ARAC_ANUB_GATE           = 181195,                   //open when anub dead?
-    GO_ARAC_ANUB_DOOR           = 181126,                   //encounter door
-    GO_ARAC_FAER_WEB            = 181235,                   //encounter door
-    GO_ARAC_DOOD_DOOR_2         = 181235,                   //after faerlina, to outer ring
-    GO_ARAC_MAEX_OUTER_DOOR     = 181209,                   //right before maex
-    GO_ARAC_MAEX_INNER_DOOR     = 181197,                   //encounter door
-
-    GO_PLAG_SLIME01_DOOR        = 181198,
-    GO_PLAG_SLIME02_DOOR        = 181199,
-    GO_PLAG_NOTH_ENTRY_DOOR     = 181200,                   //encounter door
-    GO_PLAG_NOTH_EXIT_DOOR      = 181201,                   //exit, open when boss dead
-    GO_PLAG_HEIG_ENTRY_DOOR     = 181202,
-    GO_PLAG_HEIG_EXIT_DOOR      = 181203,                   //exit, open when boss dead
-    GO_PLAG_LOAT_DOOR           = 181241,                   //encounter door
-
-    GO_MILI_GOTH_ENTRY_GATE     = 181124,
-    GO_MILI_GOTH_EXIT_GATE      = 181125,
-    GO_MILI_GOTH_COMBAT_GATE    = 181170,                   //encounter door (?)
-    GO_MILI_HORSEMEN_DOOR       = 181119,                   //encounter door
-
-    GO_CHEST_HORSEMEN_NORM      = 181366,                   //four horsemen event, DoRespawnGameObject() when event == DONE
-    GO_CHEST_HORSEMEN_HERO      = 193426,
-
-    GO_CONS_PATH_EXIT_DOOR      = 181123,
-    GO_CONS_GLUT_EXIT_DOOR      = 181120,                   //encounter door (?)
-    GO_CONS_THAD_DOOR           = 181121,
-
-    NPC_ZELIEK                  = 16063,
-    NPC_THANE                   = 16064,
-    NPC_BLAUMEUX                = 16065,
-    NPC_RIVENDARE               = 30549,
-
-    NPC_THADDIUS                = 15928,
-    NPC_STALAGG                 = 15929,
-    NPC_FEUGEN                  = 15930,
-
-    AREATRIGGER_FROSTWYRM       = 4120                      //not needed here, but AT to be scripted
+    {181126,    BOSS_ANUBREKHAN,DOOR_TYPE_ROOM,     BOUNDARY_S},
+    {181195,    BOSS_ANUBREKHAN,DOOR_TYPE_PASSAGE,  0},
+    {194022,    BOSS_FAERLINA,  DOOR_TYPE_PASSAGE,  0},
+    {181209,    BOSS_FAERLINA,  DOOR_TYPE_PASSAGE,  0},
+    {181209,    BOSS_MAEXXNA,   DOOR_TYPE_ROOM,     BOUNDARY_SW},
+    {181200,    BOSS_NOTH,      DOOR_TYPE_ROOM,     BOUNDARY_N},
+    {181201,    BOSS_NOTH,      DOOR_TYPE_PASSAGE,  BOUNDARY_E},
+    {181202,    BOSS_NOTH,      DOOR_TYPE_PASSAGE,  0},
+    {181202,    BOSS_HEIGAN,    DOOR_TYPE_ROOM,     BOUNDARY_N},
+    {181203,    BOSS_HEIGAN,    DOOR_TYPE_PASSAGE,  BOUNDARY_E},
+    {181241,    BOSS_HEIGAN,    DOOR_TYPE_PASSAGE,  0},
+    {181241,    BOSS_LOATHEB,   DOOR_TYPE_ROOM,     BOUNDARY_W},
+    {181123,    BOSS_PATCHWERK, DOOR_TYPE_PASSAGE,  0},
+    {181123,    BOSS_GROBBULUS, DOOR_TYPE_ROOM,     0},
+    {181120,    BOSS_GLUTH,     DOOR_TYPE_PASSAGE,  BOUNDARY_NW},
+    {181121,    BOSS_GLUTH,     DOOR_TYPE_PASSAGE,  0},
+    {181121,    BOSS_THADDIUS,  DOOR_TYPE_ROOM,     0},
+    {181124,    BOSS_RAZUVIOUS, DOOR_TYPE_PASSAGE,  0},
+    {181124,    BOSS_GOTHIK,    DOOR_TYPE_ROOM,     BOUNDARY_N},
+    {181125,    BOSS_GOTHIK,    DOOR_TYPE_PASSAGE,  BOUNDARY_S},
+    {181119,    BOSS_GOTHIK,    DOOR_TYPE_PASSAGE,  0},
+    {181119,    BOSS_HORSEMEN,  DOOR_TYPE_ROOM,     BOUNDARY_NE},
+    {181225,    BOSS_SAPPHIRON, DOOR_TYPE_PASSAGE,  BOUNDARY_W},
+    {0,         0,              DOOR_TYPE_ROOM,     0}, // EOF
 };
 
-struct MANGOS_DLL_DECL instance_naxxramas : public ScriptedInstance
+const MinionData minionData[] =
 {
-    instance_naxxramas(Map* pMap) : ScriptedInstance(pMap) {Initialize();}
+    //{16573,     BOSS_ANUBREKHAN},     there is no spawn point in db, so we do not add them here
+    {16506,     BOSS_FAERLINA},
+    {16803,     BOSS_RAZUVIOUS},
+    {16063,     BOSS_HORSEMEN},
+    {16064,     BOSS_HORSEMEN},
+    {16065,     BOSS_HORSEMEN},
+    {30549,     BOSS_HORSEMEN},
+    {0,         0,}
+};
 
-    std::string strInstData;
-    uint32 m_uiEncounter[ENCOUNTERS];
+#define GO_GOTHIK_GATE      181170
+#define GO_HORSEMEN_CHEST   181366
 
-    void Initialize()
-    {
-        for(uint8 i = 0; i < ENCOUNTERS; i++)
-            m_uiEncounter[i] = NOT_STARTED;
-    }
+#define SPELL_ERUPTION      29371
 
-    void OnCreatureCreate(Creature* pCreature)
-    {
-    }
+const float HeiganPos[2] = {2796, -3707};
+const float HeiganEruptionSlope[3] =
+{
+    (-3685 - HeiganPos[1]) /(2724 - HeiganPos[0]),
+    (-3647 - HeiganPos[1]) /(2749 - HeiganPos[0]),
+    (-3637 - HeiganPos[1]) /(2771 - HeiganPos[0]),
+};
 
-    void OnObjectCreate(GameObject* pGo)
-    {
-    }
-
-    void SetData(uint32 uiType, uint32 uiData)
-    {
-    }
-
-    uint32 GetData(uint32 uiType)
-    {
+// 0  H      x
+//  1        ^
+//   2       |
+//    3  y<--o
+inline uint32 GetEruptionSection(float x, float y)
+{
+    y -= HeiganPos[1];
+    if(y < 1.0f)
         return 0;
+
+    x -= HeiganPos[0];
+    if(x > -1.0f)
+        return 3;
+
+    float slope = y/x;
+    for(uint32 i = 0; i < 3; ++i)
+        if(slope > HeiganEruptionSlope[i])
+            return i;
+    return 3;
+}
+
+struct MANGOS_DLL_DECL instance_naxxramas : public InstanceData
+{
+    instance_naxxramas(Map *map) : InstanceData(map)
+        , Sapphiron(NULL), GothikGate(NULL), HorsemenChest(NULL), HorsemenNum(0)
+    {
+        SetBossNumber(MAX_BOSS_NUMBER);
+        LoadDoorData(doorData);
+        LoadMinionData(minionData);
     }
 
-    uint64 GetData64(uint32 uiData)
+    std::set<GameObject*> HeiganEruption[4];
+    GameObject *GothikGate, *HorsemenChest;
+    Creature *Sapphiron;
+    uint32 HorsemenNum;
+
+    void OnCreatureCreate(Creature *creature, bool add)
     {
-        return 0;
+        switch(creature->GetEntry())
+        {
+            case 15989: Sapphiron = add ? creature : NULL; return;
+        }
+
+        AddMinion(creature, add);
+    }
+
+    void OnGameObjectCreate(GameObject* go, bool add)
+    {
+        if(go->GetGOInfo()->displayId == 6785 || go->GetGOInfo()->displayId == 1287)
+        {
+            uint32 section = GetEruptionSection(go->GetPositionX(), go->GetPositionY());
+            if(add)
+                HeiganEruption[section].insert(go);
+            else
+                HeiganEruption[section].erase(go);
+            return;
+        }
+
+        switch(go->GetEntry())
+        {
+            case GO_BIRTH: if(!add && Sapphiron) Sapphiron->AI()->DoAction(DATA_SAPPHIRON_BIRTH); return;
+            case GO_GOTHIK_GATE: GothikGate = add ? go : NULL; break;
+            case GO_HORSEMEN_CHEST: HorsemenChest = add ? go : NULL; break;
+        }
+
+        AddDoor(go, add);
+    }
+
+    void SetData(uint32 id, uint32 value)
+    {
+        switch(id)
+        {
+            case DATA_HEIGAN_ERUPT:
+                HeiganErupt(value);
+                break;
+            case DATA_GOTHIK_GATE:
+                if(GothikGate)
+                    GothikGate->SetGoState(GOState(value));
+                break;
+        }
+    }
+
+    bool SetBossState(uint32 id, EncounterState state)
+    {
+        if(!InstanceData::SetBossState(id, state))
+            return false;
+        
+        if(id == BOSS_HORSEMEN && state == DONE && HorsemenChest)
+            HorsemenChest->SetRespawnTime(HorsemenChest->GetRespawnDelay());
+
+        return true;
+    }
+
+    void HeiganErupt(uint32 section)
+    {
+        for(uint32 i = 0; i < 4; ++i)
+        {
+            if(i == section)
+                continue;
+
+            for(std::set<GameObject*>::iterator itr = HeiganEruption[i].begin(); itr != HeiganEruption[i].end(); ++itr)
+            {
+                (*itr)->SendCustomAnim();
+                (*itr)->CastSpell(NULL, SPELL_ERUPTION);
+            }
+        }
     }
 };
 
-InstanceData* GetInstanceData_instance_naxxramas(Map* pMap)
+InstanceData* GetInstanceData_instance_naxxramas(Map* map)
 {
-    return new instance_naxxramas(pMap);
+    return new instance_naxxramas(map);
 }
 
 void AddSC_instance_naxxramas()
 {
-    Script* pNewScript;
-    pNewScript = new Script;
-    pNewScript->Name = "instance_naxxramas";
-    pNewScript->GetInstanceData = &GetInstanceData_instance_naxxramas;
-    pNewScript->RegisterSelf();
+    Script *newscript;
+    newscript = new Script;
+    newscript->Name = "instance_naxxramas";
+    newscript->GetInstanceData = &GetInstanceData_instance_naxxramas;
+    newscript->RegisterSelf();
 }
